@@ -24,12 +24,20 @@ This project is a **Content-Based Recommendation API** tailored for the apartmen
 
 ---
 
-## 📦 Project Structure
+## 🔧 Project Structure
+
+- `app.py`: Main Flask API to serve recommendations
+- `utils/hybrid_model.py`: Core logic for hybrid filtering
+- `data/`: CSV apartment listings and reviews
+- `models/`: Pre-trained models in .pkl format
+- `form_illustration/`: UI wireframe references
+
+---
+
+## 🚀 Running Locally
+
+1. Clone this repo
+2. Install dependencies:
 
 ```bash
-📁 project/
-├── tfidf_vectorizer.pkl          # Pre-trained TF-IDF vectorizer
-├── tfidf_matrix.pkl              # Saved matrix from apartment TF-IDF features
-├── Data_Apart_Listing.csv        # Apartment listing dataset
-├── api.py                        # FastAPI backend
-└── README.md                     # Project overview
+pip install -r requirements.txt
