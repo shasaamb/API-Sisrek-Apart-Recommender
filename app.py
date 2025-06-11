@@ -1,11 +1,13 @@
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 from fastapi import FastAPI, HTTPException
-from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import List
 import pandas as pd
 import requests
 import uvicorn
+
 
 # --- Init FastAPI ---
 app = FastAPI()
@@ -30,43 +32,54 @@ tfidf_matrix = tfidf.fit_transform(apart_df["token"])
 
 # --- Pydantic Models ---
 class Facilities(BaseModel):
-    furniture: Optional[List[str]] = []
-    kitchen: Optional[List[str]] = []
-    bathroom: Optional[List[str]] = []
-    utility: Optional[List[str]] = []
+    furnishings: List[str] = Field(default_factory=list)
+    appliances: List[str] = Field(default_factory=list)
+    bathroom_features: List[str] = Field(default_factory=list)
+    conveniences: List[str] = Field(default_factory=list)
 
 class UserForm(BaseModel):
-    tipe_lokasi: List[str]
-    tipe_kamar_tidur: str
+    preferred_area: List[str]  # adapted from 'tipe_lokasi'
+    type_bedroom: str  # adapted from 'tipe_kamar_tidur'
     facilities: Facilities
-    descriptions_proximity_category: List[str]
-    descriptions_building_facility: List[str]
+    proximity: List[str]  # adapted from 'descriptions_proximity_category'
+    building_facility: List[str]  # adapted from 'descriptions_building_facility'
 
 class Filters(BaseModel):
-    min_price: float
-    max_price: float
-    min_rating: float
-    max_rating: float
-    min_size: float
-    max_size: float
+    price_range_min: float
+    price_range_max: float
+    rating_range_min: float
+    rating_range_max: float
+    size_range_min: float
+    size_range_max: float
 
 class RecommendationRequest(BaseModel):
     user_form: UserForm
     filters: Filters
-    top_n: Optional[int] = 10
-    
+    top_n: int = 10
+
 # --- Helper functions ---
 def build_query(form: UserForm) -> str:
     query = []
-    query += form.tipe_lokasi
-    query += form.tipe_kamar_tidur.split("_")
+    query += form.preferred_area
+    query += form.type_bedroom.split("_")
+
     for group in form.facilities.__dict__.values():
         query += group
-    query += form.descriptions_proximity_category
-    query += form.descriptions_building_facility
+
+    query += form.proximity
+    query += form.building_facility
+
     return " ".join(query)
 
 def apply_filters(df: pd.DataFrame, f: Filters) -> pd.DataFrame:
+    # Convert columns to float, safely (non-convertible values become NaN)
+    df = df.copy()  # Avoid modifying original DataFrame
+
+    df["apart_price"] = pd.to_numeric(df["apart_price"], errors="coerce")
+    df["apart_rating"] = pd.to_numeric(df["apart_rating"], errors="coerce")
+    df["apart_ukuran"] = pd.to_numeric(df["apart_ukuran"], errors="coerce")
+
+    # Apply filters
     return df[
         (df["apart_price"] >= f.price_range_min) &
         (df["apart_price"] <= f.price_range_max) &
@@ -107,7 +120,7 @@ def recommend(req: RecommendationRequest):
                 "facilities", "description_proximity", "description_proximity_category",
                 "description_building_facilities", "bed_config", "lokasi_token",
                 "facilities_token", "proximity_token", "building_facility_token",
-                "cbf_feature_string", "bedroom_token", "bathroom_token", "token"
+                "cbf_feature_string", "bedroom_token", "bathroom_token", "token", "cbf_score", "cbf_score_scaled", "similarity_percent"
             ]
         ]
 
