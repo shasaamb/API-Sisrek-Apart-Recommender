@@ -78,7 +78,7 @@ def apply_filters(df: pd.DataFrame, f: Filters) -> pd.DataFrame:
 
 # --- API Endpoint ---
 @app.post("/recommendations")
-def recommend(req: RecommendationRequest):
+async def recommend(req: RecommendationRequest):
     try:
         query_string = build_query(req.user_form)
         query_vec = tfidf.transform([query_string])
