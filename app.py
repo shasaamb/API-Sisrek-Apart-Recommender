@@ -1,8 +1,9 @@
 from sklearn.metrics.pairwise import cosine_similarity
 from fastapi import FastAPI, HTTPException
-from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import List
 import pandas as pd
+import requests
 import uvicorn
 import pickle
 
@@ -46,6 +47,11 @@ class Filters(BaseModel):
     size_range_min: float
     size_range_max: float
 
+class RecommendationRequest(BaseModel):
+    user_form: UserForm
+    filters: Filters
+    top_n: int = 10
+    
 # --- Helper functions ---
 def build_query(form: UserForm) -> str:
     query = []
@@ -69,7 +75,7 @@ def apply_filters(df: pd.DataFrame, f: Filters) -> pd.DataFrame:
         (df["apart_ukuran"] >= f.size_range_min) &
         (df["apart_ukuran"] <= f.size_range_max)
     ]
-    
+
 # --- API Endpoint ---
 @app.post("/recommendations")
 def recommend(req: RecommendationRequest):
