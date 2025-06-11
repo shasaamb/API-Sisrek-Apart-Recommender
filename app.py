@@ -123,13 +123,13 @@ def recommend(req: RecommendationRequest):
         final_data = result.to_dict(orient="records")
 
         return {
-            "status": "success",
+            "status": 200,
             "recommendations": final_data
         }
 
     except Exception as e:
         raise HTTPException(
-            status_code=500,
+            status_code=400,
             detail={
                 "status": "failed",
                 "error": str(e)
