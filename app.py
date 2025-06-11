@@ -1,7 +1,7 @@
 from sklearn.metrics.pairwise import cosine_similarity
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 import pandas as pd
 import requests
 import uvicorn
@@ -27,30 +27,30 @@ with open("models/tfidf_matrix.pkl", "rb") as f:
 
 # --- Pydantic Models ---
 class Facilities(BaseModel):
-    furnishings: List[str] = Field(default_factory=list)
-    appliances: List[str] = Field(default_factory=list)
-    bathroom_features: List[str] = Field(default_factory=list)
-    conveniences: List[str] = Field(default_factory=list)
+    furniture: Optional[List[str]] = []
+    kitchen: Optional[List[str]] = []
+    bathroom: Optional[List[str]] = []
+    utility: Optional[List[str]] = []
 
 class UserForm(BaseModel):
-    preferred_area: List[str]  # adapted from 'tipe_lokasi'
-    type_bedroom: str  # adapted from 'tipe_kamar_tidur'
+    tipe_lokasi: List[str]
+    tipe_kamar_tidur: str
     facilities: Facilities
-    proximity: List[str]  # adapted from 'descriptions_proximity_category'
-    building_facility: List[str]  # adapted from 'descriptions_building_facility'
+    descriptions_proximity_category: List[str]
+    descriptions_building_facility: List[str]
 
 class Filters(BaseModel):
-    price_range_min: float
-    price_range_max: float
-    rating_range_min: float
-    rating_range_max: float
-    size_range_min: float
-    size_range_max: float
+    min_price: float
+    max_price: float
+    min_rating: float
+    max_rating: float
+    min_size: float
+    max_size: float
 
 class RecommendationRequest(BaseModel):
     user_form: UserForm
     filters: Filters
-    top_n: int = 10
+    top_n: Optional[int] = 10
     
 # --- Helper functions ---
 def build_query(form: UserForm) -> str:
@@ -78,7 +78,7 @@ def apply_filters(df: pd.DataFrame, f: Filters) -> pd.DataFrame:
 
 # --- API Endpoint ---
 @app.post("/recommendations")
-async def recommend(req: RecommendationRequest):
+def recommend(req: RecommendationRequest):
     try:
         query_string = build_query(req.user_form)
         query_vec = tfidf.transform([query_string])
