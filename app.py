@@ -2,8 +2,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 import pandas as pd
 import requests
 import uvicorn
@@ -31,26 +31,27 @@ tfidf_matrix = tfidf.fit_transform(apart_df["token"])
 #     tfidf_matrix = pickle.load(f)
 
 # --- Pydantic Models ---
-class Facilities(BaseModel):
-    furnishings: List[str] = Field(default_factory=list)
-    appliances: List[str] = Field(default_factory=list)
-    bathroom_features: List[str] = Field(default_factory=list)
-    conveniences: List[str] = Field(default_factory=list)
+class UserFormFacilities(BaseModel):
+    furniture: Optional[List[str]] = []
+    appliances: Optional[List[str]] = []
+    bathroom_features: Optional[List[str]] = []
+    conveniences: Optional[List[str]] = []
 
 class UserForm(BaseModel):
-    preferred_area: List[str]  # adapted from 'tipe_lokasi'
-    type_bedroom: str  # adapted from 'tipe_kamar_tidur'
-    facilities: Facilities
-    proximity: List[str]  # adapted from 'descriptions_proximity_category'
-    building_facility: List[str]  # adapted from 'descriptions_building_facility'
+    tipe_lokasi: List[str]
+    jumlah_kamar_tidur: int
+    tipe_kamar_tidur: Optional[List[str]] = []
+    facilities: UserFormFacilities
+    descriptions_proximity_category: Optional[List[str]] = []
+    descriptions_building_facility: Optional[List[str]] = []
 
 class Filters(BaseModel):
-    price_range_min: float
-    price_range_max: float
-    rating_range_min: float
-    rating_range_max: float
-    size_range_min: float
-    size_range_max: float
+    min_price: float
+    max_price: float
+    min_rating: float
+    max_rating: float
+    min_size: float
+    max_size: float
 
 class RecommendationRequest(BaseModel):
     user_form: UserForm
@@ -60,33 +61,38 @@ class RecommendationRequest(BaseModel):
 # --- Helper functions ---
 def build_query(form: UserForm) -> str:
     query = []
-    query += form.preferred_area
-    query += form.type_bedroom.split("_")
 
-    for group in form.facilities.__dict__.values():
-        query += group
+    query += form.tipe_lokasi
 
-    query += form.proximity
-    query += form.building_facility
+    if form.tipe_kamar_tidur:
+        query += form.tipe_kamar_tidur
+
+    facilities_dict = form.facilities.__dict__
+    for group in facilities_dict.values():
+        if group:  
+            query += group
+
+    query += form.descriptions_proximity_category
+
+    query += form.descriptions_building_facility
 
     return " ".join(query)
 
+
 def apply_filters(df: pd.DataFrame, f: Filters) -> pd.DataFrame:
-    # Convert columns to float, safely (non-convertible values become NaN)
-    df = df.copy()  # Avoid modifying original DataFrame
+    df = df.copy() 
 
     df["apart_price"] = pd.to_numeric(df["apart_price"], errors="coerce")
     df["apart_rating"] = pd.to_numeric(df["apart_rating"], errors="coerce")
     df["apart_ukuran"] = pd.to_numeric(df["apart_ukuran"], errors="coerce")
 
-    # Apply filters
     return df[
-        (df["apart_price"] >= f.price_range_min) &
-        (df["apart_price"] <= f.price_range_max) &
-        (df["apart_rating"] >= f.rating_range_min) &
-        (df["apart_rating"] <= f.rating_range_max) &
-        (df["apart_ukuran"] >= f.size_range_min) &
-        (df["apart_ukuran"] <= f.size_range_max)
+        (df["apart_price"] >= f.min_price) &
+        (df["apart_price"] <= f.max_price) &
+        (df["apart_rating"] >= f.min_rating) &
+        (df["apart_rating"] <= f.max_rating) &
+        (df["apart_ukuran"] >= f.min_size) &
+        (df["apart_ukuran"] <= f.max_size)
     ]
 
 # --- API Endpoint ---
@@ -100,27 +106,17 @@ def recommend(req: RecommendationRequest):
         scored_df = apart_df.copy()
         scored_df["cbf_score"] = sim_scores
 
-        # Normalize to 1-5 scale
         cbf_min = scored_df["cbf_score"].min()
         cbf_max = scored_df["cbf_score"].max()
         scored_df["cbf_score_scaled"] = (scored_df["cbf_score"] - cbf_min) / (cbf_max - cbf_min + 1e-9) * 4 + 1
 
-        # Convert to percentage similarity
         scored_df["similarity_percent"] = scored_df["cbf_score"] * 100
 
         filtered_df = apply_filters(scored_df, req.filters)
 
         result = filtered_df.sort_values(by="cbf_score", ascending=False).head(req.top_n)[
             [
-                "id", "apart_name", "images", "detail_url", "descriptions",
-                "apart_owner", "apart_owner_link", "apart_owner_verified",
-                "apart_location", "apart_address_og", "apart_address_cleaned",
-                "apart_price", "apart_rating", "apart_ukuran",
-                "tipe_apart", "tipe_kamar_tidur", "total_kamar_tidur", "total_kamar_mandi",
-                "facilities", "description_proximity", "description_proximity_category",
-                "description_building_facilities", "bed_config", "lokasi_token",
-                "facilities_token", "proximity_token", "building_facility_token",
-                "cbf_feature_string", "bedroom_token", "bathroom_token", "token", "cbf_score", "cbf_score_scaled", "similarity_percent"
+                "id", "cbf_score_scaled"
             ]
         ]
 
