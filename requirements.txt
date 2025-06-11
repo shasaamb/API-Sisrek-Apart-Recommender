@@ -3,3 +3,6 @@ uvicorn
 pydantic
 pandas
 scikit-learn
+List
+requests
+pickle
