@@ -10,7 +10,13 @@ import pickle
 app = FastAPI()
 
 # --- Load data and models ---
-apart_df = pd.read_csv("data/Data_Apart_Listing.csv")
+try:
+    url = "https://ruanghuni.thisarcid.com/api/apartments"
+    response = requests.get(url, timeout=5)
+    response.raise_for_status()
+    apart_df = pd.DataFrame(response.json())
+except Exception as e:
+      raise Exception(f"Error fetching apartment data: {str(e)}")
 
 with open("models/tfidf.pkl", "rb") as f:
     tfidf = pickle.load(f)
@@ -20,52 +26,50 @@ with open("models/tfidf_matrix.pkl", "rb") as f:
 
 # --- Pydantic Models ---
 class Facilities(BaseModel):
-    furniture: Optional[List[str]] = []
-    kitchen: Optional[List[str]] = []
-    bathroom: Optional[List[str]] = []
-    utility: Optional[List[str]] = []
+    furnishings: List[str] = Field(default_factory=list)
+    appliances: List[str] = Field(default_factory=list)
+    bathroom_features: List[str] = Field(default_factory=list)
+    conveniences: List[str] = Field(default_factory=list)
 
 class UserForm(BaseModel):
-    tipe_lokasi: List[str]
-    tipe_kamar_tidur: str
+    preferred_area: List[str]  # adapted from 'tipe_lokasi'
+    type_bedroom: str  # adapted from 'tipe_kamar_tidur'
     facilities: Facilities
-    descriptions_proximity_category: List[str]
-    descriptions_building_facility: List[str]
+    proximity: List[str]  # adapted from 'descriptions_proximity_category'
+    building_facility: List[str]  # adapted from 'descriptions_building_facility'
 
 class Filters(BaseModel):
-    min_price: float
-    max_price: float
-    min_rating: float
-    max_rating: float
-    min_size: float
-    max_size: float
-
-class RecommendationRequest(BaseModel):
-    user_form: UserForm
-    filters: Filters
-    top_n: Optional[int] = 10
+    price_range_min: float
+    price_range_max: float
+    rating_range_min: float
+    rating_range_max: float
+    size_range_min: float
+    size_range_max: float
 
 # --- Helper functions ---
 def build_query(form: UserForm) -> str:
     query = []
-    query += form.tipe_lokasi
-    query += form.tipe_kamar_tidur.split("_")
+    query += form.preferred_area
+    query += form.type_bedroom.split("_")
+
     for group in form.facilities.__dict__.values():
         query += group
-    query += form.descriptions_proximity_category
-    query += form.descriptions_building_facility
+
+    query += form.proximity
+    query += form.building_facility
+
     return " ".join(query)
 
 def apply_filters(df: pd.DataFrame, f: Filters) -> pd.DataFrame:
     return df[
-        (df["apart_price"] >= f.min_price) &
-        (df["apart_price"] <= f.max_price) &
-        (df["apart_rating"] >= f.min_rating) &
-        (df["apart_rating"] <= f.max_rating) &
-        (df["apart_ukuran"] >= f.min_size) &
-        (df["apart_ukuran"] <= f.max_size)
+        (df["apart_price"] >= f.price_range_min) &
+        (df["apart_price"] <= f.price_range_max) &
+        (df["apart_rating"] >= f.rating_range_min) &
+        (df["apart_rating"] <= f.rating_range_max) &
+        (df["apart_ukuran"] >= f.size_range_min) &
+        (df["apart_ukuran"] <= f.size_range_max)
     ]
-
+    
 # --- API Endpoint ---
 @app.post("/recommendations")
 def recommend(req: RecommendationRequest):
@@ -90,8 +94,14 @@ def recommend(req: RecommendationRequest):
         result = filtered_df.sort_values(by="cbf_score", ascending=False).head(req.top_n)[
             [
                 "id", "apart_name", "images", "detail_url", "descriptions",
-                "apart_location", "apart_address_og", "apart_price", "apart_rating",
-                "cbf_score", "cbf_score_scaled", "similarity_percent"
+                "apart_owner", "apart_owner_link", "apart_owner_verified",
+                "apart_location", "apart_address_og", "apart_address_cleaned",
+                "apart_price", "apart_rating", "apart_ukuran",
+                "tipe_apart", "tipe_kamar_tidur", "total_kamar_tidur", "total_kamar_mandi",
+                "facilities", "description_proximity", "description_proximity_category",
+                "description_building_facilities", "bed_config", "lokasi_token",
+                "facilities_token", "proximity_token", "building_facility_token",
+                "cbf_feature_string", "bedroom_token", "bathroom_token", "token"
             ]
         ]
 
