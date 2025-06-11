@@ -55,15 +55,12 @@ class RecommendationRequest(BaseModel):
 # --- Helper functions ---
 def build_query(form: UserForm) -> str:
     query = []
-    query += form.preferred_area
-    query += form.type_bedroom.split("_")
-
+    query += form.tipe_lokasi
+    query += form.tipe_kamar_tidur.split("_")
     for group in form.facilities.__dict__.values():
         query += group
-
-    query += form.proximity
-    query += form.building_facility
-
+    query += form.descriptions_proximity_category
+    query += form.descriptions_building_facility
     return " ".join(query)
 
 def apply_filters(df: pd.DataFrame, f: Filters) -> pd.DataFrame:
