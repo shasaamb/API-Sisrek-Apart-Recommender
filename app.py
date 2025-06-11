@@ -1,3 +1,4 @@
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from fastapi import FastAPI, HTTPException
 from typing import List, Optional
@@ -5,7 +6,6 @@ from pydantic import BaseModel
 import pandas as pd
 import requests
 import uvicorn
-import pickle
 
 # --- Init FastAPI ---
 app = FastAPI()
@@ -19,11 +19,14 @@ try:
 except Exception as e:
       raise Exception(f"Error fetching apartment data: {str(e)}")
 
-with open("models/tfidf.pkl", "rb") as f:
-    tfidf = pickle.load(f)
+tfidf = TfidfVectorizer()
+tfidf_matrix = tfidf.fit_transform(apart_df["token"])
 
-with open("models/tfidf_matrix.pkl", "rb") as f:
-    tfidf_matrix = pickle.load(f)
+# import pickle
+# with open("models/tfidf.pkl", "rb") as f:
+#     tfidf = pickle.load(f)
+# with open("models/tfidf_matrix.pkl", "rb") as f:
+#     tfidf_matrix = pickle.load(f)
 
 # --- Pydantic Models ---
 class Facilities(BaseModel):
